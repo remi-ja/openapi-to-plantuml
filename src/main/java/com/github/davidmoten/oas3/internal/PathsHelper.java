@@ -229,6 +229,8 @@ public final class PathsHelper {
                                     // TODO
                                     System.out.println("TODO handle null schema in response");
                                 } else if (sch.get$ref() != null) {
+                                    // Transform external ref into internal one, to work with com.github.davidmoten.oas3.puml.Converter.openApiToPuml(java.io.File, java.util.List<java.io.File>)
+                                    sch.set$ref(sch.get$ref().replaceFirst("^[^#]+#", "#"));
                                     String returnClassName = names.refToClassName(sch.get$ref()).className();
                                     m = m.add(Association.from(className).to(returnClassName).one()
                                             .responseCode(responseCode)

@@ -8,7 +8,9 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -46,6 +48,35 @@ public final class Converter {
     public static String openApiToPuml(File file) throws IOException {
         try (InputStream in = new BufferedInputStream(new FileInputStream(file))) {
             return openApiToPuml(in);
+        }
+    }
+
+    /**
+     * Quick and dirty approach : merge all dependencies into the main openApi definition, excepting paths.
+     * Works properly in simple cases, but can introduce unwanted behaviors,
+     * specially if definitions with the same name are present into multiple files
+     * @param main file, the primary open api definition
+     * @param secondaries files, linked by the main, directly or indirectly
+     * @return the puml String
+     */
+    public static String openApiToPuml(File main, List<File> secondaries) throws IOException {
+        if (null == secondaries || secondaries.isEmpty()) {
+            return openApiToPuml(main);
+        }
+        try (InputStream mainInputStream = new BufferedInputStream(Files.newInputStream(main.toPath()))) {
+            SwaggerParseResult mainResult = new OpenAPIParser().readContents(IOUtils.toString(mainInputStream, StandardCharsets.UTF_8), null, null);
+            secondaries.forEach(file -> {
+                try (InputStream is = new BufferedInputStream(Files.newInputStream(file.toPath()))) {
+                    SwaggerParseResult secondaryResult = new OpenAPIParser().readContents(IOUtils.toString(is, StandardCharsets.UTF_8), null, null);
+                    secondaryResult.getOpenAPI().getComponents().getSchemas().forEach((s, schema) -> mainResult.getOpenAPI().getComponents().getSchemas().putIfAbsent(s, schema));
+                    secondaryResult.getOpenAPI().getComponents().getResponses().forEach((s, response) -> mainResult.getOpenAPI().getComponents().getResponses().putIfAbsent(s, response));
+                    secondaryResult.getOpenAPI().getComponents().getRequestBodies().forEach((s, requestBody) -> mainResult.getOpenAPI().getComponents().getRequestBodies().putIfAbsent(s, requestBody));
+                    secondaryResult.getOpenAPI().getComponents().getParameters().forEach((s, parameter) -> mainResult.getOpenAPI().getComponents().getParameters().putIfAbsent(s, parameter));
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+            return openApiToPuml(mainResult.getOpenAPI());
         }
     }
 
